@@ -88,14 +88,16 @@ class DecisionEngine:
         return True
     
     def _calculate_bet_amount(self, confidence: float) -> float:
-        """Calcular monto de apuesta basado en la estrategia"""
+        # Estrategia de apuesta basada en confianza
+        if confidence < 0.5:
+            return 0.0
         
-        if settings.bankroll.strategy == "martingale":
-            return self._martingale_strategy(confidence)
-        elif settings.bankroll.strategy == "fibonacci":
-            return self._fibonacci_strategy(confidence)
-        else:  # flat betting
-            return self._flat_strategy(confidence)
+        # Apuesta proporcional a la confianza
+        base_bet = settings.bankroll.base_bet
+        bet_amount = base_bet * confidence
+        
+        # Aplicar límites
+        return min(bet_amount, settings.bankroll.max_bet)
     
     def _martingale_strategy(self, confidence: float) -> float:
         """Estrategia Martingala (peligrosa)"""
