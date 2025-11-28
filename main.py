@@ -131,7 +131,9 @@ async def run_full_bot(config):
     logger.info("🚀 Iniciando Baccarat Bot Avanzado (Modo Completo)")
     
     try:
-        bot = AdvancedBaccaratBot(config)
+        # Convertir BotConfig a diccionario para AdvancedBaccaratBot
+        config_dict = config.to_dict() if hasattr(config, 'to_dict') else config
+        bot = AdvancedBaccaratBot(config_dict)
         await bot.initialize()
         await bot.start()
         

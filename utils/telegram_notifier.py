@@ -57,8 +57,7 @@ class TelegramNotifier:
             logger.error(f"Error conectando a Telegram: {e}")
             return False
     
-    async def send_message(self, message: str, parse_mode: str = "Markdown", 
-                          disable_notification: bool = False) -> bool:
+    async def send_message(self, message: str, parse_mode: str = "HTML", disable_notification: bool = False) -> bool:
         """Envía un mensaje a Telegram"""
         try:
             if not self.session:
@@ -117,11 +116,11 @@ class TelegramNotifier:
         """Envía una alerta de administrador"""
         
         alert_message = f"""
-🚨 *ALERTA ADMINISTRADOR* 🚨
+    🚨 <b>ALERTA ADMINISTRADOR</b> 🚨
 
-Tipo: {alert_type.upper()}
-Mensaje: {message}
-Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    <b>Tipo:</b> {alert_type.upper()}
+    <b>Mensaje:</b> {message}
+    <b>Tiempo:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
         
         # Enviar al chat de administrador
@@ -135,7 +134,7 @@ Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             self.chat_id = original_chat_id
     
     async def send_photo(self, photo_path: str, caption: str = "", 
-                        parse_mode: str = "Markdown") -> bool:
+                        parse_mode: str = "HTML") -> bool:
         """Envía una foto"""
         try:
             if not self.session:
@@ -212,25 +211,25 @@ Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         tie_prob = probs.get('T', 0)
         
         message = f"""
-🎯 *NUEVA SEÑAL BACCARAT* 🎯
+    🎯 <b>NUEVA SEÑAL BACCARAT</b> 🎯
 
-{confidence_emoji.get(signal_data.get('confidence', ''), '⚪')} *CONFIANZA:* {signal_data.get('confidence', 'UNKNOWN')} ({signal_data.get('confidence_score', 0):.1%})
+    {confidence_emoji.get(signal_data.get('confidence', ''), '⚪')} <b>CONFIANZA:</b> {signal_data.get('confidence', 'UNKNOWN')} ({signal_data.get('confidence_score', 0):.1%})
 
-{bet_emoji.get(signal_data.get('recommended_bet', ''), '🎲')} *APUESTA:* **{signal_data.get('recommended_bet', '?')}**
-💰 *CANTIDAD:* {signal_data.get('bet_size', 0)} unidades
-📊 *VALOR ESPERADO:* {signal_data.get('expected_value', 0):+.2f}
-⚠️ *RIESGO:* {signal_data.get('risk_level', 'UNKNOWN')}
+    {bet_emoji.get(signal_data.get('recommended_bet', ''), '🎲')} <b>APUESTA:</b> <b>{signal_data.get('recommended_bet', '?')}</b>
+    💰 <b>CANTIDAD:</b> {signal_data.get('bet_size', 0)} unidades
+    📊 <b>VALOR ESPERADO:</b> {signal_data.get('expected_value', 0):+.2f}
+    ⚠️ <b>RIESGO:</b> {signal_data.get('risk_level', 'UNKNOWN')}
 
-📈 *PROBABILIDADES:*
-   🏦 Banker: {banker_prob:.1%}
-   👤 Player: {player_prob:.1%}
-   🤝 Tie: {tie_prob:.1%}
+    📈 <b>PROBABILIDADES:</b>
+       🏦 Banker: {banker_prob:.1%}
+       👤 Player: {player_prob:.1%}
+       🤝 Tie: {tie_prob:.1%}
 
-🧠 *ANÁLISIS:* {signal_data.get('reasoning', {}).get('primary_factor', 'estadístico')}
-⏰ *Tiempo:* {signal_data.get('timestamp', datetime.now().isoformat())[:19]}
-🆔 *Mesa:* {signal_data.get('table_id', 'unknown')}
+    🧠 <b>ANÁLISIS:</b> {signal_data.get('reasoning', {}).get('primary_factor', 'estadístico')}
+    ⏰ <b>Tiempo:</b> {signal_data.get('timestamp', datetime.now().isoformat())[:19]}
+    🆔 <b>Mesa:</b> {signal_data.get('table_id', 'unknown')}
 
-🚀 *¡LISTO PARA APOSTAR!*
+    🚀 <b>¡LISTO PARA APOSTAR!</b>
         """
         
         return message.strip()
@@ -239,23 +238,23 @@ Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """Formatea mensaje de reporte"""
         
         message = f"""
-📊 *REPORTE DE ESTADO - BACCARAT BOT*
+    📊 <b>REPORTE DE ESTADO - BACCARAT BOT</b>
 
-⏱️ *Tiempo de operación:* {report_data.get('uptime', '0h')}
-🎯 *Señales enviadas:* {report_data.get('signals_sent', 0)}
-🟢 *Alta confianza:* {report_data.get('high_confidence_signals', 0)}
-📈 *Beneficio:* ${report_data.get('total_profit', 0):+.2f}
-🎲 *Acierto:* {report_data.get('success_rate', 0):.1%}
+    ⏱️ <b>Tiempo de operación:</b> {report_data.get('uptime', '0h')}
+    🎯 <b>Señales enviadas:</b> {report_data.get('signals_sent', 0)}
+    🟢 <b>Alta confianza:</b> {report_data.get('high_confidence_signals', 0)}
+    📈 <b>Beneficio:</b> ${report_data.get('total_profit', 0):+.2f}
+    🎲 <b>Acierto:</b> {report_data.get('success_rate', 0):.1%}
 
-🏦 *Datos procesados:* {report_data.get('hands_processed', 0)} manos
-📊 *Mesas activas:* {report_data.get('active_tables', 0)}
-🎲 *Distribución:*
-   • Banker: {report_data.get('banker_percentage', 0):.1%}
-   • Player: {report_data.get('player_percentage', 0):.1%}
-   • Tie: {report_data.get('tie_percentage', 0):.1%}
+    🏦 <b>Datos procesados:</b> {report_data.get('hands_processed', 0)} manos
+    📊 <b>Mesas activas:</b> {report_data.get('active_tables', 0)}
+    🎲 <b>Distribución:</b>
+       • Banker: {report_data.get('banker_percentage', 0):.1%}
+       • Player: {report_data.get('player_percentage', 0):.1%}
+       • Tie: {report_data.get('tie_percentage', 0):.1%}
 
-🚀 *Sistema operativo*
-💰 *Listo para próximas señales*
+    🚀 <b>Sistema operativo</b>
+    💰 <b>Listo para próximas señales</b>
         """
         
         return message.strip()
@@ -299,7 +298,7 @@ class TelegramBotManager:
         for bot in self.bots.values():
             await bot.initialize()
     
-    async def send_to_all(self, message: str, parse_mode: str = "Markdown"):
+    async def send_to_all(self, message: str, parse_mode: str = "HTML"):
         """Envía mensaje a todos los bots"""
         tasks = []
         for bot in self.bots.values():

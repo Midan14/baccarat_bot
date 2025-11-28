@@ -1,0 +1,41 @@
+{
+    "bankroll": {
+        "initial_amount": 1000.0,
+        "base_unit": 10.0
+    },
+    "telegram": {
+        "enabled": true,
+        "bot_token": "7892748327:AAHF874evLoi1JQNrOJrRe9ZQ8-Grq6f-g8",
+        "chat_id": "631443236",
+        "send_signals": true,
+        "send_reports": true,
+        "report_interval_minutes": 5
+    },
+    "data_sources": [
+        {
+            "casino_name": "evolution_gaming",
+            "api_key": "demo_key_12345",
+            "enabled": true,
+            "priority": 1
+        },
+        {
+            "casino_name": "pragmatic_play",
+            "api_key": "demo_key_67890",
+            "enabled": true,
+            "priority": 2
+        }
+    ],
+    "signals": {
+        "frequency": 5,
+        "min_confidence": "MEDIUM",
+        "max_signals_per_hour": 12,
+        "bet_confirmation_delay": 3
+    },
+    "monte_carlo": {
+        "num_simulations": 1000
+    },
+    "general": {
+        "max_session_duration": 3600,
+        "report_interval_minutes": 5
+    }
+}

@@ -125,6 +125,36 @@ def analisis_profesional(historial):
     return senal, confianza, razon
 
 
+def analisis_temprano(historial):
+    """Análisis temprano para señales rápidas basadas en 3 resultados"""
+    
+    if len(historial) < 3:
+        return None, 0, "Datos insuficientes"
+    
+    # Análisis de últimos 3 resultados para señales tempranas
+    ultimos_3 = historial[-3:]
+    
+    # Frecuencias en últimos 3
+    b_3 = ultimos_3.count('B')
+    p_3 = ultimos_3.count('P')
+    
+    # Detectar patrones tempranos
+    if b_3 >= 2:
+        senal = 'B'
+        razon = f"Dominancia Dragon {b_3}-{p_3} en últimos 3"
+        confianza = min(0.7, 0.5 + (b_3 - p_3) * 0.15)
+    elif p_3 >= 2:
+        senal = 'P'
+        razon = f"Dominancia Tiger {p_3}-{b_3} en últimos 3"
+        confianza = min(0.7, 0.5 + (p_3 - b_3) * 0.15)
+    else:
+        senal = 'NONE'
+        razon = "Sin patrón claro detectado"
+        confianza = 0.0
+    
+    return senal, confianza, razon
+
+
 async def bot_principal():
     """Bot principal con señales basadas en datos realistas"""
     
@@ -143,10 +173,10 @@ async def bot_principal():
     print(f"✅ Datos obtenidos: {len(historial)} resultados")
     print(f"📊 Muestra: {historial[:10]}")
     
-    # Crear instancia del notificador
+    # Crear instancia del notificador con credenciales reales
     telegram_notifier = TelegramNotifier(
-        token="TU_TOKEN_AQUI",
-        chat_id="TU_CHAT_ID_AQUI"
+        token="7892748327:AAHF874evLoi1JQNrOJrRe9ZQ8-Grq6f-g8",
+        chat_id="631443236"
     )
     
     # Inicializar el notificador
@@ -156,14 +186,14 @@ async def bot_principal():
     mensaje_inicio = f"""
 🤖 <b>BOT REAL DE SEÑALES - BACCARAT</b>
 
-✅ Datos obtenidos de casino real
-📊 {len(historial)} resultados analizados
-🧠 Análisis profesional activado
-⏰ Señales cada 15 segundos
+✅  Datos obtenidos de casino real
+ 📊  {len(historial)} resultados analizados
+ 🧠  Análisis profesional activado
+ ⏰  Señales cada 15 segundos
 
-📈 Muestra de datos: {historial[:8]}
+ 📈  Muestra de datos: {', '.join(historial[:8])}
     """
-    await telegram_notifier.send_message(mensaje_inicio)
+    await telegram_notifier.send_message(mensaje_inicio, parse_mode="HTML")
     
     iteracion = 0
     
@@ -189,6 +219,37 @@ async def bot_principal():
             # Análisis profesional
             senal, confianza, razon = analisis_profesional(historial)
             
+            # Análisis adicional para señales tempranas
+            senal_temprana, confianza_temprana, razon_temprana = (
+                analisis_temprano(historial)
+            )
+            
+            if (senal_temprana and senal_temprana != 'NONE' and
+                    confianza_temprana >= 0.6):
+                # Enviar señal temprana primero
+                color_temp = "🔴" if senal_temprana == 'B' else "🔵"
+                nombre_temp = "DRAGON" if senal_temprana == 'B' else "TIGER"
+                
+                mensaje_temprano = f"""
+⚡ <b>SEÑAL TEMPRANA - BACCARAT</b>
+
+{color_temp}  <b>APOSTAR A:</b> {nombre_temp} ({senal_temprana})
+ 📊  <b>Confianza:</b> {confianza_temprana*100:.0f}%
+ 🧠  <b>Análisis:</b> {razon_temprana}
+
+ 📈  <b>Últimos 3:</b> {', '.join(historial[-3:])}
+ ⏰  <b>Hora:</b> {datetime.now().strftime('%H:%M:%S')}
+
+ ⚡  ¡SEÑAL RÁPIDA!
+                """
+                await telegram_notifier.send_message(
+                    mensaje_temprano, parse_mode="HTML"
+                )
+                print(
+                    f"⚡ SEÑAL TEMPRANA ENVIADA: {senal_temprana} con "
+                    f"{confianza_temprana*100:.0f}% confianza"
+                )
+            
             if senal and senal != 'NONE':
                 # Es una señal válida
                 color = "🔴" if senal == 'B' else "🔵"
@@ -197,17 +258,19 @@ async def bot_principal():
                 mensaje = f"""
 🎯 <b>SEÑAL REAL - BACCARAT</b>
 
-{color} <b>APOSTAR A:</b> {nombre} ({senal})
-📊 <b>Confianza:</b> {confianza*100:.0f}%
-🧠 <b>Análisis:</b> {razon}
+{color}  <b>APOSTAR A:</b> {nombre} ({senal})
+ 📊  <b>Confianza:</b> {confianza*100:.0f}%
+ 🧠  <b>Análisis:</b> {razon}
 
-📈 <b>Últimos 5:</b> {historial[-5:]}
-💰 <b>Apuesta sugerida:</b> ${confianza:.1f}
-⏰ <b>Hora:</b> {datetime.now().strftime('%H:%M:%S')}
+ 📈  <b>Últimos 5:</b> {', '.join(historial[-5:])}
+ 💰  <b>Apuesta sugerida:</b> ${confianza:.1f}
+ ⏰  <b>Hora:</b> {datetime.now().strftime('%H:%M:%S')}
                 """
                 
                 # Enviar a Telegram
-                success = await telegram_notifier.send_message(mensaje)
+                success = await telegram_notifier.send_message(
+                    mensaje, parse_mode="HTML"
+                )
                 if success:
                     print(f"✅ SEÑAL REAL ENVIADA: {senal} con "
                           f"{confianza*100:.0f}% confianza")
@@ -219,13 +282,15 @@ async def bot_principal():
                 mensaje_neutral = f"""
 ⚡ <b>ANÁLISIS NEUTRO</b>
 
-🧠 <b>Razón:</b> {razon}
-📊 <b>Últimos 5:</b> {historial[-5:]}
-⏰ <b>Hora:</b> {datetime.now().strftime('%H:%M:%S')}
+🧠  <b>Razón:</b> {razon}
+ 📊  <b>Últimos 5:</b> {', '.join(historial[-5:])}
+ ⏰  <b>Hora:</b> {datetime.now().strftime('%H:%M:%S')}
 
-💡 <b>Recomendación:</b> Esperar señal más clara
+ 💡  <b>Recomendación:</b> Esperar señal más clara
                 """
-                await telegram_notifier.send_message(mensaje_neutral)
+                await telegram_notifier.send_message(
+                    mensaje_neutral, parse_mode="HTML"
+                )
                 print("⚡ Señal neutral - no hay patrón claro")
             
             print("⏰ Esperando 15 segundos...")
@@ -235,7 +300,7 @@ async def bot_principal():
         print("\n⏹️ Bot detenido por el usuario")
         
         mensaje_final = f"""
-🛑 <b>BOT DETENIDO</b>
+🛑 BOT DETENIDO
 
 📊 Total de análisis: {iteracion}
 ✅ Señales reales generadas
@@ -243,7 +308,7 @@ async def bot_principal():
 
 ✅ Sistema funcionando correctamente
         """
-        await telegram_notifier.send_message(mensaje_final)
+        await telegram_notifier.send_message(mensaje_final, parse_mode="HTML")
 
 
 def main():
