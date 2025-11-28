@@ -1,0 +1,82 @@
+# .gitignore - Archivos y carpetas a ignorar
+
+# Entorno virtual
+venv/
+env/
+ENV/
+
+# Variables de entorno (contienen credenciales sensibles)
+.env
+.env.local
+.env.production
+
+# Archivos de configuración con credenciales
+config.ini
+credentials.json
+secrets.json
+
+# Logs
+logs/
+*.log
+
+# Screenshots
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
