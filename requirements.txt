@@ -20,3 +20,84 @@ playwright==1.40.0
 pytest-playwright==0.4.3
 pytest-asyncio==0.21.1
 asyncio==3.4.3
+# Baccarat Bot Avanzado - Dependencias
+
+# Framework principal
+numpy>=1.21.0
+pandas>=1.3.0
+asyncio-mqtt>=0.11.0
+
+# Machine Learning y IA
+tensorflow>=2.8.0
+tensorflow-gpu>=2.8.0
+scikit-learn>=1.0.0
+scipy>=1.7.0
+
+# Procesamiento de datos
+matplotlib>=3.5.0
+seaborn>=0.11.0
+plotly>=5.0.0
+
+# Conexiones de red
+aiohttp>=3.8.0
+websockets>=10.0
+requests>=2.26.0
+urllib3>=1.26.0
+
+# Bases de datos y almacenamiento
+redis>=4.0.0
+sqlalchemy>=1.4.0
+sqlite3
+joblib>=1.1.0
+
+# Utilidades del sistema
+python-dotenv>=0.19.0
+pyyaml>=6.0.0
+click>=8.0.0
+argparse
+pathlib2>=2.3.0
+
+# Monitoreo y logging
+psutil>=5.8.0
+memory-profiler>=0.60.0
+prometheus-client>=0.12.0
+
+# Testing
+pytest>=6.2.0
+pytest-asyncio>=0.18.0
+pytest-cov>=3.0.0
+mock>=4.0.0
+
+# Desarrollo
+black>=22.0.0
+flake8>=4.0.0
+mypy>=0.940
+pre-commit>=2.17.0
+
+# Seguridad
+cryptography>=36.0.0
+pycryptodome>=3.15.0
+
+# Análisis de datos
+statsmodels>=0.13.0
+
+# Configuración adicional para mejor performance
+# Instalar con: pip install -r requirements.txt
+
+# Notas de instalación:
+# 1. Para GPU support con TensorFlow:
+#    pip install tensorflow-gpu>=2.8.0
+#    # Requiere CUDA Toolkit 11.2 y cuDNN 8.1
+
+# 2. Para desarrollo:
+#    pip install -r requirements.txt
+#    pip install -r requirements-dev.txt
+
+# 3. Para producción:
+#    pip install --no-dev -r requirements.txt
+
+# Dependencias opcionales para características avanzadas:
+# jupyterlab>=3.0.0  # Para análisis interactivo
+# streamlit>=1.8.0   # Para dashboard web
+# fastapi>=0.75.0    # Para API REST
+# uvicorn>=0.17.0    # Servidor ASGI

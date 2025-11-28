@@ -1,181 +1,317 @@
-# utils/telegram_notifier.py
-import requests
-from typing import Optional, Dict, Any
-from config.settings import settings
-from utils.logger import logger
+"""
+Notificador de Telegram para señales y reportes
+"""
 
+import asyncio
+import aiohttp
+from typing import Dict, List, Optional
+import json
+import time
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TelegramNotifier:
-    """Manejador de notificaciones de Telegram"""
+    """Gestiona notificaciones a través de Telegram"""
     
-    def __init__(self):
-        self.token = settings.telegram.bot_token
-        self.chat_id = settings.telegram.chat_id
-        self.enabled = settings.telegram.enabled
-        self.base_url = f"https://api.telegram.org/bot{self.token}"
+    def __init__(self, token: str, chat_id: str, admin_chat_id: str = None):
+        self.token = token
+        self.chat_id = chat_id
+        self.admin_chat_id = admin_chat_id or chat_id
+        self.base_url = f"https://api.telegram.org/bot{token}"
+        self.session = None
         
-    def send_message(self, message: str, parse_mode: str = "HTML") -> bool:
-        """
-        Enviar mensaje a Telegram
+        # Estadísticas
+        self.messages_sent = 0
+        self.errors_count = 0
+        self.last_error = None
         
-        Args:
-            message: Texto del mensaje
-            parse_mode: Formato del mensaje (HTML, Markdown, etc.)
-            
-        Returns:
-            bool: True si se envió correctamente, False en caso contrario
-        """
-        if not self.enabled:
-            logger.debug("Telegram deshabilitado, mensaje no enviado")
-            return False
-            
+    async def initialize(self):
+        """Inicializa la conexión"""
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30)
+        )
+        
+        # Verificar conexión
+        await self.test_connection()
+    
+    async def test_connection(self) -> bool:
+        """Verifica que el bot está funcionando"""
         try:
-            url = f"{self.base_url}/sendMessage"
+            async with self.session.get(f"{self.base_url}/getMe") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('ok'):
+                        bot_info = data.get('result', {})
+                        logger.info(f"✅ Bot conectado: {bot_info.get('first_name', 'Unknown')}")
+                        return True
+                    else:
+                        logger.error(f"Error en respuesta de Telegram: {data}")
+                        return False
+                else:
+                    logger.error(f"Error HTTP: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error conectando a Telegram: {e}")
+            return False
+    
+    async def send_message(self, message: str, parse_mode: str = "Markdown", 
+                          disable_notification: bool = False) -> bool:
+        """Envía un mensaje a Telegram"""
+        try:
+            if not self.session:
+                await self.initialize()
+            
             payload = {
-                "chat_id": self.chat_id,
-                "text": message,
-                "parse_mode": parse_mode
+                'chat_id': self.chat_id,
+                'text': message,
+                'parse_mode': parse_mode,
+                'disable_notification': disable_notification
             }
             
-            response = requests.post(url, json=payload, timeout=10)
+            # Limitar longitud del mensaje
+            if len(message) > 4096:
+                message = message[:4093] + "..."
+                payload['text'] = message
             
-            if response.status_code == 200:
-                logger.info(f"Mensaje enviado a Telegram: {message[:50]}...")
-                return True
-            else:
-                logger.error(f"Error al enviar mensaje a Telegram: "
-                             f"{response.status_code} - {response.text}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Excepción al enviar mensaje a Telegram: {e}")
-            return False
-    
-    def send_prediction_signal(self, game_type: str, prediction: str,
-                               confidence: float, reasoning: str = "",
-                               additional_info: Optional[Dict[str, Any]] = None
-                               ) -> bool:
-        """
-        Enviar señal de predicción formateada
-        
-        Args:
-            game_type: Tipo de juego (Dragon, Tiger, Tie)
-            prediction: Predicción (Dragon, Tiger, Tie)
-            confidence: Nivel de confianza (0-100)
-            reasoning: Razón de la predicción
-            additional_info: Información adicional
-            
-        Returns:
-            bool: True si se envió correctamente
-        """
-        emoji = "🎯" if confidence > 70 else "⚡" if confidence > 50 else "🎲"
-        
-        message = f"""
-{emoji} <b>SEÑAL DE PREDICCIÓN - LIGHTNING DRAGON TIGER</b>
-
-🎮 <b>Juego:</b> {game_type}
-🔮 <b>Predicción:</b> {prediction}
-📊 <b>Confianza:</b> {confidence:.1f}%
-
-"""
-        
-        if reasoning:
-            message += f"🧠 <b>Análisis:</b> {reasoning}\n\n"
-        
-        if additional_info:
-            message += "📈 <b>Estadísticas:</b>\n"
-            for key, value in additional_info.items():
-                message += f"• {key}: {value}\n"
-        
-        message += "\n<i>¡Buena suerte!</i>"
-        
-        return self.send_message(message.strip())
-    
-    def send_result_notification(self, prediction: str, result: str,
-                                 won: bool, profit: float, balance: float
-                                 ) -> bool:
-        """
-        Enviar notificación de resultado de apuesta
-        
-        Args:
-            prediction: Predicción realizada
-            result: Resultado real
-            won: Si se ganó o perdió
-            profit: Ganancia/perdida
-            balance: Balance actual
-            
-        Returns:
-            bool: True si se envió correctamente
-        """
-        emoji = "✅" if won else "❌"
-        profit_emoji = "💰" if profit > 0 else "📉"
-        
-        message = f"""
-{emoji} <b>RESULTADO DE APUESTA</b>
-
-🔮 <b>Predicción:</b> {prediction}
-🎯 <b>Resultado:</b> {result}
-{profit_emoji} <b>Ganancia:</b> ${profit:.2f}
-💳 <b>Balance:</b> ${balance:.2f}
-"""
-        
-        return self.send_message(message.strip())
-    
-    def send_error_notification(self, error_type: str, error_message: str,
-                                context: Optional[str] = None) -> bool:
-        """
-        Enviar notificación de error
-        
-        Args:
-            error_type: Tipo de error
-            error_message: Mensaje de error
-            context: Contexto adicional
-            
-        Returns:
-            bool: True si se envió correctamente
-        """
-        message = f"""
-⚠️ <b>ERROR DETECTADO</b>
-
-🔥 <b>Tipo:</b> {error_type}
-❗ <b>Mensaje:</b> {error_message}
-"""
-        
-        if context:
-            message += f"\n📝 <b>Contexto:</b> {context}"
-        
-        return self.send_message(message)
-    
-    def test_connection(self) -> bool:
-        """
-        Probar la conexión con Telegram
-        
-        Returns:
-            bool: True si la conexión es exitosa
-        """
-        try:
-            url = f"{self.base_url}/getMe"
-            response = requests.get(url, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("ok"):
-                    bot_info = data.get("result", {})
-                    logger.info(f"Conexión exitosa con bot: "
-                                f"@{bot_info.get('username', 'unknown')}")
-                    return True
+            async with self.session.post(
+                f"{self.base_url}/sendMessage",
+                json=payload
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get('ok'):
+                        self.messages_sent += 1
+                        logger.debug("Mensaje enviado exitosamente")
+                        return True
+                    else:
+                        logger.error(f"Error en respuesta: {result}")
+                        self.errors_count += 1
+                        return False
                 else:
-                    logger.error("La API respondió pero no está OK")
+                    logger.error(f"Error HTTP: {response.status}")
+                    self.errors_count += 1
                     return False
-            else:
-                logger.error(f"Error al conectar con Telegram: "
-                             f"{response.status_code}")
-                return False
-                
+                    
         except Exception as e:
-            logger.error(f"Excepción al probar conexión: {e}")
+            logger.error(f"Error enviando mensaje: {e}")
+            self.errors_count += 1
+            self.last_error = str(e)
             return False
+    
+    async def send_signal(self, signal_data: Dict) -> bool:
+        """Envía una señal formateada"""
+        
+        message = self._format_signal_message(signal_data)
+        return await self.send_message(message)
+    
+    async def send_report(self, report_data: Dict) -> bool:
+        """Envía un reporte formateado"""
+        
+        message = self._format_report_message(report_data)
+        return await self.send_message(message)
+    
+    async def send_alert(self, alert_type: str, message: str) -> bool:
+        """Envía una alerta de administrador"""
+        
+        alert_message = f"""
+🚨 *ALERTA ADMINISTRADOR* 🚨
+
+Tipo: {alert_type.upper()}
+Mensaje: {message}
+Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        """
+        
+        # Enviar al chat de administrador
+        original_chat_id = self.chat_id
+        self.chat_id = self.admin_chat_id
+        
+        try:
+            result = await self.send_message(alert_message)
+            return result
+        finally:
+            self.chat_id = original_chat_id
+    
+    async def send_photo(self, photo_path: str, caption: str = "", 
+                        parse_mode: str = "Markdown") -> bool:
+        """Envía una foto"""
+        try:
+            if not self.session:
+                await self.initialize()
+            
+            with open(photo_path, 'rb') as photo_file:
+                form_data = aiohttp.FormData()
+                form_data.add_field('chat_id', self.chat_id)
+                form_data.add_field('photo', photo_file)
+                form_data.add_field('caption', caption)
+                form_data.add_field('parse_mode', parse_mode)
+                
+                async with self.session.post(
+                    f"{self.base_url}/sendPhoto",
+                    data=form_data
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        return result.get('ok', False)
+                    else:
+                        logger.error(f"Error HTTP enviando foto: {response.status}")
+                        return False
+                        
+        except Exception as e:
+            logger.error(f"Error enviando foto: {e}")
+            return False
+    
+    async def send_document(self, document_path: str, caption: str = "") -> bool:
+        """Envía un documento"""
+        try:
+            if not self.session:
+                await self.initialize()
+            
+            with open(document_path, 'rb') as document_file:
+                form_data = aiohttp.FormData()
+                form_data.add_field('chat_id', self.chat_id)
+                form_data.add_field('document', document_file)
+                form_data.add_field('caption', caption)
+                
+                async with self.session.post(
+                    f"{self.base_url}/sendDocument",
+                    data=form_data
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        return result.get('ok', False)
+                    else:
+                        logger.error(f"Error HTTP enviando documento: {response.status}")
+                        return False
+                        
+        except Exception as e:
+            logger.error(f"Error enviando documento: {e}")
+            return False
+    
+    def _format_signal_message(self, signal_data: Dict) -> str:
+        """Formatea mensaje de señal"""
+        
+        confidence_emoji = {
+            'HIGH': '🟢🔥',
+            'MEDIUM': '🟡⚡',
+            'LOW': '🔴💤'
+        }
+        
+        bet_emoji = {
+            'B': '🏦💰',
+            'P': '👤💵',
+            'T': '🤝💎'
+        }
+        
+        # Probabilidades
+        probs = signal_data.get('monte_carlo_probs', {})
+        banker_prob = probs.get('B', 0)
+        player_prob = probs.get('P', 0)
+        tie_prob = probs.get('T', 0)
+        
+        message = f"""
+🎯 *NUEVA SEÑAL BACCARAT* 🎯
+
+{confidence_emoji.get(signal_data.get('confidence', ''), '⚪')} *CONFIANZA:* {signal_data.get('confidence', 'UNKNOWN')} ({signal_data.get('confidence_score', 0):.1%})
+
+{bet_emoji.get(signal_data.get('recommended_bet', ''), '🎲')} *APUESTA:* **{signal_data.get('recommended_bet', '?')}**
+💰 *CANTIDAD:* {signal_data.get('bet_size', 0)} unidades
+📊 *VALOR ESPERADO:* {signal_data.get('expected_value', 0):+.2f}
+⚠️ *RIESGO:* {signal_data.get('risk_level', 'UNKNOWN')}
+
+📈 *PROBABILIDADES:*
+   🏦 Banker: {banker_prob:.1%}
+   👤 Player: {player_prob:.1%}
+   🤝 Tie: {tie_prob:.1%}
+
+🧠 *ANÁLISIS:* {signal_data.get('reasoning', {}).get('primary_factor', 'estadístico')}
+⏰ *Tiempo:* {signal_data.get('timestamp', datetime.now().isoformat())[:19]}
+🆔 *Mesa:* {signal_data.get('table_id', 'unknown')}
+
+🚀 *¡LISTO PARA APOSTAR!*
+        """
+        
+        return message.strip()
+    
+    def _format_report_message(self, report_data: Dict) -> str:
+        """Formatea mensaje de reporte"""
+        
+        message = f"""
+📊 *REPORTE DE ESTADO - BACCARAT BOT*
+
+⏱️ *Tiempo de operación:* {report_data.get('uptime', '0h')}
+🎯 *Señales enviadas:* {report_data.get('signals_sent', 0)}
+🟢 *Alta confianza:* {report_data.get('high_confidence_signals', 0)}
+📈 *Beneficio:* ${report_data.get('total_profit', 0):+.2f}
+🎲 *Acierto:* {report_data.get('success_rate', 0):.1%}
+
+🏦 *Datos procesados:* {report_data.get('hands_processed', 0)} manos
+📊 *Mesas activas:* {report_data.get('active_tables', 0)}
+🎲 *Distribución:*
+   • Banker: {report_data.get('banker_percentage', 0):.1%}
+   • Player: {report_data.get('player_percentage', 0):.1%}
+   • Tie: {report_data.get('tie_percentage', 0):.1%}
+
+🚀 *Sistema operativo*
+💰 *Listo para próximas señales*
+        """
+        
+        return message.strip()
+    
+    async def close(self):
+        """Cierra la conexión"""
+        if self.session:
+            await self.session.close()
+    
+    def get_stats(self) -> Dict:
+        """Obtiene estadísticas"""
+        return {
+            'messages_sent': self.messages_sent,
+            'errors_count': self.errors_count,
+            'last_error': self.last_error,
+            'success_rate': (self.messages_sent / (self.messages_sent + self.errors_count)) if (self.messages_sent + self.errors_count) > 0 else 0
+        }
 
 
-# Instancia global del notificador
-telegram_notifier = TelegramNotifier()
+class TelegramBotManager:
+    """Gestiona múltiples bots de Telegram"""
+    
+    def __init__(self):
+        self.bots: Dict[str, TelegramNotifier] = {}
+        self.default_bot = None
+    
+    def add_bot(self, name: str, token: str, chat_id: str, admin_chat_id: str = None):
+        """Agrega un bot"""
+        self.bots[name] = TelegramNotifier(token, chat_id, admin_chat_id)
+        if not self.default_bot:
+            self.default_bot = name
+    
+    def get_bot(self, name: str = None) -> Optional[TelegramNotifier]:
+        """Obtiene un bot por nombre"""
+        if name is None:
+            name = self.default_bot
+        return self.bots.get(name)
+    
+    async def initialize_all(self):
+        """Inicializa todos los bots"""
+        for bot in self.bots.values():
+            await bot.initialize()
+    
+    async def send_to_all(self, message: str, parse_mode: str = "Markdown"):
+        """Envía mensaje a todos los bots"""
+        tasks = []
+        for bot in self.bots.values():
+            task = bot.send_message(message, parse_mode)
+            tasks.append(task)
+        
+        if tasks:
+            await asyncio.gather(*tasks)
+    
+    def get_all_stats(self) -> Dict:
+        """Obtiene estadísticas de todos los bots"""
+        stats = {}
+        for name, bot in self.bots.items():
+            stats[name] = bot.get_stats()
+        return stats

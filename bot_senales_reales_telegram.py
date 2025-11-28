@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
 Bot con señales basadas en datos reales de casinos
+con integración completa de Telegram
 """
 
 import asyncio
 from datetime import datetime
 from utils.telegram_notifier import TelegramNotifier
+from config.settings import BotConfig
 
 
 class RealCasinoData:
@@ -68,12 +70,10 @@ def analisis_profesional(historial):
     
     # Análisis de múltiples factores
     ultimos_5 = historial[-5:]
-    # ultimos_10 = historial[-10:]  # Para futuras extensiones
     
     # Frecuencias
     b_5 = ultimos_5.count('B')
     p_5 = ultimos_5.count('P')
-    # t_5 = ultimos_5.count('T')  # Para futuras extensiones
     
     # Análisis de rachas
     racha_actual = 1
@@ -135,6 +135,23 @@ async def bot_principal():
     print("📱 Enviando señales a Telegram cada 15 segundos")
     print("="*60)
     
+    # Cargar configuración
+    config = BotConfig()
+    
+    # Verificar configuración de Telegram
+    telegram_configured = (
+        config.telegram.enabled and
+        config.telegram.bot_token and
+        config.telegram.chat_id
+    )
+    if not telegram_configured:
+        print("❌ Telegram no está configurado correctamente")
+        print("Por favor configura las variables de entorno:")
+        print("  - TELEGRAM_BOT_TOKEN")
+        print("  - TELEGRAM_CHAT_ID")
+        print("  - TELEGRAM_ENABLED=true")
+        return
+    
     casino_data = RealCasinoData()
     
     # Obtener datos iniciales
@@ -143,27 +160,33 @@ async def bot_principal():
     print(f"✅ Datos obtenidos: {len(historial)} resultados")
     print(f"📊 Muestra: {historial[:10]}")
     
-    # Crear instancia del notificador
+    # Crear instancia del notificador con configuración real
     telegram_notifier = TelegramNotifier(
-        token="TU_TOKEN_AQUI",
-        chat_id="TU_CHAT_ID_AQUI"
+        token=config.telegram.bot_token,
+        chat_id=config.telegram.chat_id,
+        admin_chat_id=config.telegram.admin_chat_id
     )
     
     # Inicializar el notificador
     await telegram_notifier.initialize()
     
+    # Verificar conexión
+    if not await telegram_notifier.test_connection():
+        print("❌ No se pudo conectar con Telegram")
+        return
+    
+    print("✅ Conexión con Telegram establecida")
+    
     # Enviar mensaje inicial
-    mensaje_inicio = f"""
-🤖 <b>BOT REAL DE SEÑALES - BACCARAT</b>
-
-✅ Datos obtenidos de casino real
-📊 {len(historial)} resultados analizados
-🧠 Análisis profesional activado
-⏰ Señales cada 15 segundos
-
-📈 Muestra de datos: {historial[:8]}
-    """
-    await telegram_notifier.send_message(mensaje_inicio)
+    mensaje_inicio = (
+        f"🤖 <b>BOT REAL DE SEÑALES - BACCARAT</b>\n\n"
+        f"✅ Datos obtenidos de casino real\n"
+        f"📊 {len(historial)} resultados analizados\n"
+        f"🧠 Análisis profesional activado\n"
+        f"⏰ Señales cada 15 segundos\n\n"
+        f"📈 Muestra de datos: {historial[:8]}"
+    )
+    await telegram_notifier.send_message(mensaje_inicio, parse_mode="HTML")
     
     iteracion = 0
     
@@ -207,7 +230,9 @@ async def bot_principal():
                 """
                 
                 # Enviar a Telegram
-                success = await telegram_notifier.send_message(mensaje)
+                success = await telegram_notifier.send_message(
+                    mensaje, parse_mode="HTML"
+                )
                 if success:
                     print(f"✅ SEÑAL REAL ENVIADA: {senal} con "
                           f"{confianza*100:.0f}% confianza")
@@ -225,7 +250,9 @@ async def bot_principal():
 
 💡 <b>Recomendación:</b> Esperar señal más clara
                 """
-                await telegram_notifier.send_message(mensaje_neutral)
+                await telegram_notifier.send_message(
+                    mensaje_neutral, parse_mode="HTML"
+                )
                 print("⚡ Señal neutral - no hay patrón claro")
             
             print("⏰ Esperando 15 segundos...")
@@ -243,7 +270,11 @@ async def bot_principal():
 
 ✅ Sistema funcionando correctamente
         """
-        await telegram_notifier.send_message(mensaje_final)
+        await telegram_notifier.send_message(mensaje_final, parse_mode="HTML")
+    
+    finally:
+        # Cerrar conexión
+        await telegram_notifier.close()
 
 
 def main():

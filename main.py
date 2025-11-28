@@ -1,188 +1,208 @@
-# main.py
-import time
-import signal
+#!/usr/bin/env python3
+"""
+Punto de entrada principal para el Baccarat Bot Avanzado
+"""
+
 import sys
-from typing import Optional
-from config.settings import settings
-from utils.logger import logger
-from utils.helpers import helpers
-from core.browser import StealthBrowser
-from core.data_acquisition import DataAcquisition
-from core.prediction_engine import PredictionEngine
-from core.decision_engine import DecisionEngine
-from core.execution_engine import ExecutionEngine
-from core.decision_engine import BettingDecision
+import asyncio
+import argparse
+import os
+from pathlib import Path
+import logging
 
-class BaccaratBot:
-    """Bot principal de Baccarat"""
+# Agregar directorio raíz al path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config.settings import BotConfig, setup_logger
+from bot_avanzado_completo import AdvancedBaccaratBot
+from bot_senales_telegram import TelegramSignalsBot
+
+# Configurar logging
+logger = setup_logger('main')
+
+def parse_arguments():
+    """Parsea argumentos de línea de comandos"""
+    parser = argparse.ArgumentParser(
+        description='Baccarat Bot Avanzado - Sistema de predicción con IA',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Ejemplos de uso:
+  python main.py --mode full           # Ejecutar bot completo
+  python main.py --mode signals        # Solo señales de Telegram
+  python main.py --config custom.json  # Usar configuración personalizada
+  python main.py --demo               # Modo demo sin apuestas reales
+        """
+    )
     
-    def __init__(self):
-        self.running = False
-        self.browser_manager: Optional[StealthBrowser] = None
-        self.data_acquisition: Optional[DataAcquisition] = None
-        self.prediction_engine: Optional[PredictionEngine] = None
-        self.decision_engine: Optional[DecisionEngine] = None
-        self.execution_engine: Optional[ExecutionEngine] = None
-        self.page = None
-        
-        # Configurar manejo de señales para shutdown graceful
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+    parser.add_argument(
+        '--mode',
+        choices=['full', 'signals', 'demo'],
+        default='full',
+        help='Modo de operación del bot'
+    )
     
-    def _signal_handler(self, signum, frame):
-        """Manejar señales de terminación"""
-        logger.info(f"Recibida señal {signum}. Cerrando...")
-        self.stop()
+    parser.add_argument(
+        '--config',
+        type=str,
+        help='Archivo de configuración JSON'
+    )
     
-    def initialize(self) -> bool:
-        """Inicializar todos los componentes del bot"""
+    parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Ejecutar en modo demo (sin apuestas reales)'
+    )
+    
+    parser.add_argument(
+        '--bankroll',
+        type=float,
+        help='Bankroll inicial para modo demo'
+    )
+    
+    parser.add_argument(
+        '--telegram-token',
+        type=str,
+        help='Token del bot de Telegram'
+    )
+    
+    parser.add_argument(
+        '--telegram-chat',
+        type=str,
+        help='Chat ID de Telegram'
+    )
+    
+    parser.add_argument(
+        '--log-level',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default='INFO',
+        help='Nivel de logging'
+    )
+    
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='Baccarat Bot Avanzado v2.0'
+    )
+    
+    return parser.parse_args()
+
+async def load_configuration(args):
+    """Carga la configuración según los argumentos"""
+    
+    # Crear configuración base
+    config = BotConfig()
+    
+    # Cargar desde archivo si se especifica
+    if args.config:
         try:
-            logger.info("Inicializando Baccarat Bot...")
-            
-            # 1. Navegador
-            self.browser_manager = StealthBrowser()
-            self.page, browser = self.browser_manager.start()
-            
-            # 2. Navegar a la URL
-            logger.info(f"Navegando a {settings.url}")
-            self.page.goto(settings.url)
-            
-            # 3. Inicializar componentes
-            self.data_acquisition = DataAcquisition(self.page)
-            self.prediction_engine = PredictionEngine()
-            self.decision_engine = DecisionEngine()
-            self.execution_engine = ExecutionEngine(self.page)
-            
-            # 4. Esperar a que el juego cargue
-            if not self.data_acquisition.wait_for_game_load():
-                logger.error("No se pudo cargar el juego")
-                return False
-            
-            logger.info("Bot inicializado exitosamente")
-            return True
-            
+            config = BotConfig.load_from_file(args.config)
+            logger.info(f"Configuración cargada desde: {args.config}")
         except Exception as e:
-            logger.error(f"Error inicializando bot: {str(e)}", exc_info=True)
-            return False
+            logger.error(f"Error cargando configuración: {e}")
+            sys.exit(1)
     
-    def run(self):
-        """Ejecutar el bucle principal del bot"""
-        if not self.initialize():
-            logger.error("No se pudo inicializar el bot")
-            return
-        
-        self.running = True
-        iteration = 0
-        
-        logger.info("Iniciando bucle principal de apuestas...")
-        
-        while self.running:
-            try:
-                iteration += 1
-                logger.info(f"--- Iteración {iteration} ---")
-                
-                # 1. Adquirir datos del juego
-                game_state = self.data_acquisition.get_game_state()
-                if not game_state or not game_state.get('history'):
-                    logger.warning("No se pudieron obtener datos del juego")
-                    helpers.random_delay(5, 10)
-                    continue
-                
-                # 2. Analizar y predecir
-                prediction = self.prediction_engine.analyze(game_state['history'])
-                
-                # 3. Tomar decisión
-                decision = self.decision_engine.make_decision(prediction, game_state)
-                
-                # 4. Ejecutar apuesta si corresponde
-                if decision.should_bet:
-                    bet_placed = self.execution_engine.place_bet(decision)
-                    
-                    # 5. Simular resultado (en un bot real, aquí se esperaría el resultado real)
-                    # Por ahora, simulamos un resultado aleatorio para testing
-                    if bet_placed:
-                        self._simulate_game_result(decision)
-                
-                # 6. Mostrar estadísticas periódicamente
-                if iteration % 10 == 0:
-                    self._log_statistics()
-                
-                # 7. Esperar antes de la siguiente iteración
-                helpers.random_delay(3, 8)
-                
-            except Exception as e:
-                logger.error(f"Error en iteración {iteration}: {str(e)}", exc_info=True)
-                helpers.random_delay(10, 15)
-                
-                # Tomar captura de pantalla para debugging
-                if self.browser_manager:
-                    self.browser_manager.take_screenshot(f"error_iteration_{iteration}")
+    # Aplicar argumentos de línea de comandos
+    if args.demo:
+        config.signals.confirm_bets = False
+        logger.info("Modo demo activado - No se realizarán apuestas reales")
     
-    def _simulate_game_result(self, decision: BettingDecision):
-        """Simular resultado del juego (para testing)"""
-        import random
-        
-        # Simular resultado aleatorio (45% Banker, 45% Player, 10% Tie)
-        outcomes = ['B', 'B', 'P', 'P', 'E']
-        actual_result = random.choice(outcomes)
-        
-        # Calcular si ganó
-        won = (decision.bet_type == actual_result)
-        
-        # Calcular payout
-        if won:
-            if decision.bet_type == 'B':
-                payout = decision.amount * 0.95  # Comisión 5%
-            elif decision.bet_type == 'P':
-                payout = decision.amount * 1.0
-            else:  # Tie
-                payout = decision.amount * 8.0  # Pago 8:1
-        else:
-            payout = 0
-        
-        # Registrar resultado
-        self.decision_engine.record_result(decision, won, payout)
-        
-        logger.info(f"Resultado simulado: {actual_result} - "
-                   f"Apuesta: {decision.bet_type} - "
-                   f"{'GANADA' if won else 'PERDIDA'}")
+    if args.bankroll:
+        config.bankroll.initial_amount = args.bankroll
+        logger.info(f"Bankroll inicial: ${args.bankroll}")
     
-    def _log_statistics(self):
-        """Mostrar estadísticas actuales"""
-        stats = self.decision_engine.get_stats()
-        exec_stats = self.execution_engine.get_execution_stats()
-        
-        logger.info("📊 ESTADÍSTICAS ACTUALES:")
-        logger.info(f"   Apuestas totales: {stats['total_bets']}")
-        logger.info(f"   Ratio de aciertos: {stats['win_rate']:.1f}%")
-        logger.info(f"   Bankroll actual: {stats['current_bankroll']:.2f}")
-        logger.info(f"   Profit total: {stats['profit']:.2f}")
-        logger.info(f"   Ejecuciones: {exec_stats['total_executions']}")
-        logger.info(f"   Pérdidas consecutivas: {stats['consecutive_losses']}")
+    if args.telegram_token:
+        config.telegram.bot_token = args.telegram_token
     
-    def stop(self):
-        """Detener el bot gracefulmente"""
-        logger.info("Deteniendo Baccarat Bot...")
-        self.running = False
-        
-        if self.browser_manager:
-            self.browser_manager.stop()
-        
-        logger.info("Bot detenido exitosamente")
-        sys.exit(0)
+    if args.telegram_chat:
+        config.telegram.chat_id = args.telegram_chat
+    
+    # Validar configuración mínima
+    if not config.telegram.bot_token or not config.telegram.chat_id:
+        logger.warning("No se configuró Telegram. Las señales se mostrarán solo en consola.")
+        config.telegram.enabled = False
+    
+    if not config.data_sources:
+        logger.warning("No se configuraron fuentes de datos. Usando modo demo.")
+    
+    return config
 
-def main():
-    """Función principal"""
-    bot = BaccaratBot()
+async def run_full_bot(config):
+    """Ejecuta el bot completo"""
+    logger.info("🚀 Iniciando Baccarat Bot Avanzado (Modo Completo)")
     
     try:
-        bot.run()
-    except KeyboardInterrupt:
-        logger.info("Interrupción por teclado recibida")
+        bot = AdvancedBaccaratBot(config)
+        await bot.initialize()
+        await bot.start()
+        
     except Exception as e:
-        logger.error(f"Error fatal: {str(e)}", exc_info=True)
-    finally:
-        bot.stop()
+        logger.error(f"Error en bot completo: {e}")
+        raise
+
+async def run_signals_bot(config):
+    """Ejecuta solo el bot de señales"""
+    logger.info("📱 Iniciando Bot de Señales Telegram")
+    
+    try:
+        # TelegramSignalsBot espera un diccionario de configuración
+        bot = TelegramSignalsBot(config.to_dict() if hasattr(config, 'to_dict') else config)
+        await bot.initialize()
+        await bot.start()
+        
+    except Exception as e:
+        logger.error(f"Error en bot de señales: {e}")
+        raise
+
+async def run_demo_mode(config):
+    """Ejecuta en modo demo"""
+    logger.info("🎮 Iniciando en Modo Demo")
+    
+    # Configurar para modo demo
+    config.signals.confirm_bets = False
+    config.monte_carlo.num_simulations = 1000  # Menos simulaciones para demo
+    
+    # Usar bot de señales para demo
+    await run_signals_bot(config)
+
+async def main():
+    """Función principal"""
+    
+    try:
+        # Parsear argumentos
+        args = parse_arguments()
+        
+        # Configurar logging
+        if args.log_level:
+            os.environ['LOG_LEVEL'] = args.log_level
+        
+        logger.info("🎲 Baccarat Bot Avanzado v2.0")
+        logger.info("=" * 50)
+        
+        # Cargar configuración
+        config = await load_configuration(args)
+        
+        # Mostrar configuración
+        logger.info("Configuración cargada:")
+        logger.info(f"  • Modo: {args.mode}")
+        logger.info(f"  • Bankroll: ${config.bankroll.initial_amount}")
+        logger.info(f"  • Telegram: {'✅' if config.telegram.enabled else '❌'}")
+        logger.info(f"  • Fuentes de datos: {len(config.data_sources)}")
+        logger.info(f"  • Simulaciones Monte Carlo: {config.monte_carlo.num_simulations:,}")
+        
+        # Ejecutar según el modo
+        if args.mode == 'full':
+            await run_full_bot(config)
+        elif args.mode == 'signals':
+            await run_signals_bot(config)
+        elif args.mode == 'demo':
+            await run_demo_mode(config)
+        
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot detenido por el usuario")
+    except Exception as e:
+        logger.error(f"💥 Error fatal: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    # Ejecutar aplicación
+    asyncio.run(main())
